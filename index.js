@@ -1,5 +1,5 @@
 import readline from 'readline';
-import { saveConfig, initializeDatabase, getConfig, saveInitialOrderNumber, truncateDatabase } from './src/repositories/configRepository.js';
+import { saveConfig, initializeDatabase, getServiceCode, setServiceCode, getConfig, saveInitialOrderNumber, truncateDatabase } from './src/repositories/configRepository.js';
 import { getToken } from './src/services/bling/auth.js';
 import { getOrderByCode } from './src/services/bling/orders.js';
 import { getContactById } from './src/services/bling/contacts.js';
@@ -152,6 +152,7 @@ async function showConfigMenu() {
     5. Show Credentials
     6. Truncate Database
     7. Set Initial Order Number
+    8. Set Service Code
     0. Voltar ao menu principal
     `);
 
@@ -214,6 +215,22 @@ async function showConfigMenu() {
                         } else {
                             await saveInitialOrderNumber(orderNumber);
                             console.log(`Initial order number set to: ${orderNumber}`);
+                        }
+                        resolve();
+                    });
+                });
+            });
+            break;
+        case '8':
+            await new Promise((resolve) => {
+                getServiceCode().then(currentCode => {
+                    console.log('Current service code:', currentCode);
+                    rl.question('Enter new service code (or press Enter to cancel): ', async (code) => {
+                        if (!code.trim()) {
+                            console.log('Operation cancelled');
+                        } else {
+                            await setServiceCode(code.trim());
+                            console.log(`Service code updated to: ${code.trim()}`);
                         }
                         resolve();
                     });

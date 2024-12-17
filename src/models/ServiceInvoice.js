@@ -1,18 +1,22 @@
-import { sequelize } from '../config/database.js';
 import { DataTypes } from 'sequelize';
-import Order from './Order.js';
+import { sequelize } from '../config/database.js';
+import Order from './order.js'; // Fix case sensitivity
 
 const ServiceInvoice = sequelize.define('ServiceInvoice', {
     blingId: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        unique: true
     },
     numero: DataTypes.STRING,
     serie: DataTypes.STRING,
     status: DataTypes.STRING,
     orderId: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        references: {
+            model: 'orders',
+            key: 'id'
+        }
     }
 }, {
     tableName: 'service_invoices',

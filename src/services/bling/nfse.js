@@ -1,62 +1,98 @@
 import { blingRequest } from '../../wrappers/blingWrapper.cjs';
 import { getValidToken } from './auth.js';
+import { Contact } from '../../models/index.js';
+import { getServiceCode } from '../../repositories/configRepository.js';
 
 export async function issueNFSe(orderData) {
     try {
         const token = await getValidToken();
-        
-        const nfseData = {
+        const serviceCode = await getServiceCode();
+
+        // Get contact details from database
+        const contact = await Contact.findOne({
+            where: { id: orderData.contactId }
+        });
+
+        if (!contact) {
+            throw new Error('Contact not found in database');
+        }
+
+        const payload = {
+            // Contact information from database
             contato: {
-                nome: orderData.contatoNome,
-                tipoPessoa: orderData.contatoTipoPessoa,
-                numeroDocumento: orderData.contatoDocumento,
-                email: orderData.contatoDocumento,
+                id: contact.blingId,
+                nome: contact.nome,
+                numeroDocumento: contact.numeroDocumento,
+                email: contact.email || '',
+                ie: contact.ie || '',
+                telefone: contact.telefone || '',
+                im: contact.im || '',
                 endereco: {
-                    uf: "MG"
+                    bairro: contact.bairro || '',
+                    municipio: contact.municipio || '',
+                    endereco: contact.endereco || '',
+                    numero: contact.numero || '',
+                    complemento: contact.complemento || '',
+                    cep: contact.cep || '',
+                    uf: contact.uf || ''
                 }
             },
-            naturezaOperacao: {
-                id: 1
-            },
-            tipo: 1,
-            dataOperacao: orderData.dataSaida,
+
+            // Required root fields
+            numeroRPS: orderData.numero,
+            serie: orderData.serie || '1',
+            numero: orderData.numero,
+            dataEmissao: new Date().toISOString(),
+            data: new Date().toISOString(),
+            reterISS: false,
+            desconto: orderData.descontoValor || 0,
+
+            // Services array
             servicos: orderData.OrderItems.map(item => ({
-                codigo: item.codigo,
+                codigo: serviceCode,
                 descricao: item.descricao,
-                quantidade: parseFloat(item.quantidade),
-                valor: parseFloat(item.valor),
-                unidade: item.unidade,
-                codigoServico: "14.01"
-            }))
+                valor: parseFloat(item.valor)
+            })),
+
+            // Vendor information
+            vendedor: 1,
+            // Payment installments
+            parcelas: orderData.parcelas?.map(parcela => ({
+                data: parcela.dataVencimento,
+                valor: parseFloat(parcela.valor),
+                observacoes: parcela.observacoes || '',
+                formaPagamento: {
+                    id: parcela.formaPagamento?.id || 1
+                }
+            })) || [{
+                data: new Date().toISOString(),
+                valor: parseFloat(orderData.total),
+                observacoes: 'Pagamento à vista',
+                formaPagamento: { id: 1 }
+            }]
         };
 
-        console.log('NFSe request payload:', JSON.stringify(nfseData, null, 2));
+        console.log('NFSe Payload:', JSON.stringify(payload, null, 2));
+        console.log('----------------------------------------');
 
-        const response = await blingRequest('/nfse', {
+        const options = {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
-                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            data: nfseData
-        });
+            data: payload
+        };
 
-        if (response.error) {
-            console.log('Bling API error:', response);
-            if (response.error.fields) {
-                console.log('\nValidation Errors:');
-                response.error.fields.forEach((field, index) => {
-                    console.log(`${index + 1}. Field: ${field.name}`);
-                    console.log(`   Message: ${field.message}`);
-                });
-            }
-            throw new Error(response.error.description || 'Failed to issue NFSe');
+        const response = await blingRequest('/nfse', options);
+        
+        if (!response.data) {
+            throw new Error('Failed to generate NFSe');
         }
 
         return response.data;
     } catch (error) {
-        console.error('Error issuing NFSe:', error);
-        throw new Error(`Failed to issue NFSe: ${error.message}`);
+        console.error('Error generating NFSe:', error);
+        throw error;
     }
 }

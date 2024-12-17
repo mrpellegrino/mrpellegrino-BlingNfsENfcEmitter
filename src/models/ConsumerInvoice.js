@@ -1,41 +1,24 @@
-import { Model, DataTypes } from 'sequelize';
+import { DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
 
-class ConsumerInvoice extends Model {}
-
-ConsumerInvoice.init({
-    id: {
+const ConsumerInvoice = sequelize.define('ConsumerInvoice', {
+    blingId: {
         type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
+        allowNull: false,
+        unique: true
     },
-    numero: {
-        type: DataTypes.STRING
-    },
-    data: {
-        type: DataTypes.DATE
-    },
-    situacao: {
-        type: DataTypes.STRING
-    },
-    valorTotal: {
-        type: DataTypes.DECIMAL(10, 2)
-    },
-    contatoId: {
+    numero: DataTypes.STRING,
+    serie: DataTypes.STRING,
+    status: DataTypes.STRING,
+    orderId: {
         type: DataTypes.INTEGER,
         references: {
-            model: 'contacts',
+            model: 'orders',
             key: 'id'
         }
-    },
-    lojaId: {
-        type: DataTypes.INTEGER
     }
 }, {
-    sequelize,
-    modelName: 'ConsumerInvoice',
-    tableName: 'consumer_invoices',
-    timestamps: true
+    tableName: 'consumer_invoices'
 });
 
 export default ConsumerInvoice;

@@ -1,99 +1,88 @@
 import { blingRequest } from '../../wrappers/blingWrapper.cjs';
 import { getValidToken } from './auth.js';
 
+function formatDateWithOffset() {
+    const date = new Date();
+    date.setHours(date.getHours() - 6); // Subtract 6 hours
+    return date.toISOString().replace('T', ' ').split('.')[0];
+}
+
 export async function issueNFCe(orderData) {
     try {
         const token = await getValidToken();
-        
-        const nfceData = {
+
+        if (!orderData || !orderData.OrderItems?.length) {
+            throw new Error('Invalid order data: Order must have items');
+        }
+
+        const payload = {
             contato: {
                 nome: orderData.contatoNome,
                 tipoPessoa: orderData.contatoTipoPessoa,
                 numeroDocumento: orderData.contatoDocumento,
                 contribuinte: 1,
-                ie: "",
-                rg: "",
-                telefone: "",
-                email: "",
-                endereco: {
-                    endereco: "",
-                    bairro: "",
-                    municipio: "",
-                    numero: "",
-                    complemento: "",
-                    cep: "",
-                    uf: "MG",  // Required field
-                    pais: "Brasil"
-                }
+                // ...other contact fields if available
             },
             tipo: 1,
             numero: orderData.numero,
-            dataOperacao: orderData.data,
+            dataOperacao: formatDateWithOffset(),
             naturezaOperacao: {
-                id: 1  // This should be configured according to your needs
+                id: 1 // This should come from configuration
             },
             loja: {
-                id: orderData.lojaId,
-                numero: orderData.numeroLoja
+                id: orderData.lojaId
             },
-            finalidade: 1,
-            seguro: 0,
-            despesas: 0,
-            desconto: orderData.descontoValor || 0,
-            observacoes: orderData.observacoes || "",
-            itens: orderData.OrderItems?.map(item => ({
+            finalidade: 4,
+            itens: orderData.OrderItems.map(item => ({
                 codigo: item.codigo,
                 descricao: item.descricao,
                 unidade: item.unidade,
-                quantidade: parseFloat(item.quantidade),
-                valor: parseFloat(item.valor),
-                tipo: "P",
-                pesoBruto: 0,
-                pesoLiquido: 0,
-                numeroPedidoCompra: "",
-                classificacaoFiscal: "",
-                cest: "",
-                codigoServico: "",
-                origem: 0,
-                informacoesAdicionais: ""
-            })) || [],
-            parcelas: orderData.OrderInstallments?.map(parcela => ({
+                quantidade: item.quantidade,
+                valor: item.valor,
+                tipo: item.tipo
+            })),
+            parcelas: orderData.parcelas?.map(parcela => ({
                 data: parcela.dataVencimento,
-                valor: parseFloat(parcela.valor),
-                observacoes: parcela.observacoes || "",
+                valor: parcela.valor,
+                observacoes: parcela.observacoes,
                 formaPagamento: {
                     id: parcela.formaPagamentoId
                 }
-            })) || []
+            }))
         };
 
-        console.log('NFCe request payload:', JSON.stringify(nfceData, null, 2));
-
-        const response = await blingRequest('/nfce', {
+        const options = {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
-                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            data: nfceData
-        });
+            data: payload
+        };
 
-        if (response.error) {
-            console.error('Bling API error:', response);
-            if (response.error.fields) {
-                console.log('\nValidation Errors:');
-                response.error.fields.forEach((field, index) => {
-                    console.log(`${index + 1}. Field: ${field.name}`);
-                    console.log(`   Message: ${field.message}`);
-                });
-            }
-            throw new Error(response.error.description || 'Failed to issue NFCe');
+        const response = await blingRequest('/nfce', options);
+        
+        // Handle null response from API
+        if (!response || !response.data) {
+            throw new Error('Empty response received from Bling API');
+        }
+
+        // Validate response structure
+        if (!Array.isArray(response.data)) {
+            // If response is not an array, wrap it in one to match API schema
+            response.data = [response.data];
         }
 
         return response.data;
     } catch (error) {
-        console.error('Error issuing NFCe:', error);
+        // Add specific error handling
+        if (error.response?.status === 400) {
+            throw new Error(`Bad request: ${error.response.data?.error?.description || 'Unknown validation error'}`);
+        } else if (error.response?.status === 500) {
+            throw new Error('Internal server error from Bling API');
+        }
+        
+        console.error('Error generating NFCe:', error);
         throw error;
     }
 }
